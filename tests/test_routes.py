@@ -59,7 +59,11 @@ class TestProductRoutes(TestCase):
         # Set up the test database
         app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
         app.logger.setLevel(logging.CRITICAL)
-        init_db(app)
+        try:
+            init_db(app)
+        except RuntimeError:
+            # DB already initialized by the application import
+            pass
 
     @classmethod
     def tearDownClass(cls):
@@ -166,6 +170,84 @@ class TestProductRoutes(TestCase):
     #
     # ADD YOUR TEST CASES HERE
     #
+    def test_get_product(self):
+        """It should Get a single Product"""
+        test_product = self._create_products(1)[0]
+        response = self.client.get(f"{BASE_URL}/{test_product.id}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.get_json()
+        self.assertEqual(data["name"], test_product.name)
+
+    def test_get_product_not_found(self):
+        """It should not Get a Product thats not found"""
+        response = self.client.get(f"{BASE_URL}/0")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        data = response.get_json()
+        self.assertIn("was not found", data["message"])
+
+    def test_update_product(self):
+        """It should Update a Product"""
+        test_product = self._create_products(1)[0]
+        update = test_product.serialize()
+        update["description"] = "An updated description"
+        response = self.client.put(f"{BASE_URL}/{test_product.id}", json=update)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.get_json()
+        self.assertEqual(data["description"], "An updated description")
+
+    def test_delete_product(self):
+        """It should Delete a Product"""
+        test_product = self._create_products(1)[0]
+        response = self.client.delete(f"{BASE_URL}/{test_product.id}")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        # verify it's gone
+        response = self.client.get(f"{BASE_URL}/{test_product.id}")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_list_all_products(self):
+        """It should List all Products"""
+        products = self._create_products(5)
+        response = self.client.get(BASE_URL)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.get_json()
+        self.assertEqual(len(data), 5)
+
+    def test_list_by_name(self):
+        """It should List Products by Name"""
+        products = self._create_products(10)
+        name = products[0].name
+        count = len([p for p in products if p.name == name])
+        response = self.client.get(f"{BASE_URL}?name={name}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.get_json()
+        self.assertEqual(len(data), count)
+        for item in data:
+            self.assertEqual(item["name"], name)
+
+    def test_list_by_category(self):
+        """It should List Products by Category"""
+        products = self._create_products(10)
+        category = products[0].category.name
+        count = len([p for p in products if p.category.name == category])
+        response = self.client.get(f"{BASE_URL}?category={category}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.get_json()
+        self.assertEqual(len(data), count)
+        for item in data:
+            self.assertEqual(item["category"], category)
+
+    def test_list_by_availability(self):
+        """It should List Products by Availability"""
+        products = self._create_products(10)
+        available = products[0].available
+        count = len([p for p in products if p.available == available])
+        response = self.client.get(f"{BASE_URL}?available={available}")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.get_json()
+        self.assertEqual(len(data), count)
+        for item in data:
+            self.assertEqual(item["available"], available)
 
     ######################################################################
     # Utility functions
