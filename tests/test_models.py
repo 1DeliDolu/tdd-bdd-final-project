@@ -27,7 +27,7 @@ import os
 import logging
 import unittest
 from decimal import Decimal
-from service.models import Product, Category, db
+from service.models import Product, Category, db, DataValidationError
 from service import app
 from tests.factories import ProductFactory
 
@@ -211,3 +211,75 @@ class TestProductModel(unittest.TestCase):
 
         for product in found:
             self.assertEqual(product.category, category)
+
+    def test_find_by_price(self):
+        """It should Find Products by Price"""
+        products = ProductFactory.create_batch(5)
+        for product in products:
+            product.create()
+
+        price = products[0].price
+        count = len([product for product in products if product.price == price])
+
+        found = Product.find_by_price(price)
+        self.assertEqual(found.count(), count)
+
+        for product in found:
+            self.assertEqual(product.price, price)
+
+    def test_find_by_price_string(self):
+        """It should Find Products by Price passed as string"""
+        products = ProductFactory.create_batch(5)
+        for product in products:
+            product.create()
+
+        price = str(products[0].price)
+        found = Product.find_by_price(price)
+        self.assertGreater(found.count(), 0)
+
+    def test_update_without_id(self):
+        """It should not Update a Product without an id"""
+        product = ProductFactory()
+        product.id = None
+        self.assertRaises(DataValidationError, product.update)
+
+    def test_deserialize_with_invalid_available_type(self):
+        """It should not deserialize a Product with invalid available type"""
+        product = Product()
+        data = {
+            "name": "Test",
+            "description": "Test",
+            "price": "10.00",
+            "available": "not a bool",
+            "category": "TOOLS"
+        }
+        self.assertRaises(DataValidationError, product.deserialize, data)
+
+    def test_deserialize_with_invalid_attribute(self):
+        """It should not deserialize a Product with invalid attribute"""
+        product = Product()
+        data = {
+            "name": "Test",
+            "description": "Test",
+            "price": "10.00",
+            "available": True,
+            "category": "INVALID_CATEGORY"
+        }
+        self.assertRaises(DataValidationError, product.deserialize, data)
+
+    def test_deserialize_with_key_error(self):
+        """It should not deserialize a Product with missing key"""
+        product = Product()
+        data = {
+            "description": "Test",
+            "price": "10.00",
+            "available": True,
+            "category": "TOOLS"
+        }
+        self.assertRaises(DataValidationError, product.deserialize, data)
+
+    def test_deserialize_with_type_error(self):
+        """It should not deserialize a Product with wrong type"""
+        product = Product()
+        data = "not a dict"
+        self.assertRaises(DataValidationError, product.deserialize, data)
